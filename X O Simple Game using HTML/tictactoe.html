@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>haraka haraka</title>
+    <!-- CSS Styles -->
+    <style>
+        body {
+            background-color: #2c3e50;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #ecf0f1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        h1 {
+            margin-bottom: 20px;
+        }
+        #gameContainer {
+            position: relative;
+        }
+        #gameBoard {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-gap: 10px;
+            position: relative;
+        }
+        .cell {
+            width: 100px;
+            height: 100px;
+            background-color: #34495e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 64px;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: background-color 0.3s;
+            position: relative;
+        }
+        .cell:hover {
+            background-color: #3b5998;
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 24px;
+        }
+        #restartButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #e74c3c;
+            color: #ecf0f1;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #restartButton:hover {
+            background-color: #c0392b;
+        }
+        #winningLine {
+            position: absolute;
+            width: 310px;
+            height: 310px;
+            top: -5px;
+            left: -5px;
+            pointer-events: none;
+        }
+        #timers {
+            display: flex;
+            justify-content: space-between;
+            width: 320px;
+            margin-bottom: 20px;
+        }
+        .timer {
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>haraka haraka</h1>
+
+    <!-- Timers -->
+    <div id="timers">
+        <div class="timer" id="timerX">Player X Time: <span id="timeX">0</span>s</div>
+        <div class="timer" id="timerO">Player O Time: <span id="timeO">0</span>s</div>
+    </div>
+
+    <!-- Game Container -->
+    <div id="gameContainer">
+        <!-- Game Board -->
+        <div id="gameBoard">
+            <div class="cell" data-index="0"></div>
+            <div class="cell" data-index="1"></div>
+            <div class="cell" data-index="2"></div>
+            <div class="cell" data-index="3"></div>
+            <div class="cell" data-index="4"></div>
+            <div class="cell" data-index="5"></div>
+            <div class="cell" data-index="6"></div>
+            <div class="cell" data-index="7"></div>
+            <div class="cell" data-index="8"></div>
+        </div>
+        <!-- Winning Line -->
+        <canvas id="winningLine"></canvas>
+    </div>
+
+    <!-- Status Display -->
+    <div id="status"></div>
+
+    <!-- Restart Button -->
+    <button id="restartButton">Restart Game</button>
+
+    <!-- JavaScript Code -->
+    <script>
+        // Game state variables
+        const cells = document.querySelectorAll('.cell');
+        const statusText = document.getElementById('status');
+        const restartButton = document.getElementById('restartButton');
+        const timerXText = document.getElementById('timeX');
+        const timerOText = document.getElementById('timeO');
+        const winningLineCanvas = document.getElementById('winningLine');
+        const winningLineCtx = winningLineCanvas.getContext('2d');
+        let options = ["", "", "", "", "", "", "", "", ""];
+        let currentPlayer = "X";
+        let running = false;
+        let timerX = 0;
+        let timerO = 0;
+        let timerInterval;
+
+        // Sound
+        const clickSound = new Audio('https://www.soundjay.com/buttons/sounds/button-16.mp3');
+
+        // Winning combinations
+        const winConditions = [
+            [0, 1, 2], // Top row
+            [3, 4, 5], // Middle row
+            [6, 7, 8], // Bottom row
+            [0, 3, 6], // Left column
+            [1, 4, 7], // Middle column
+            [2, 5, 8], // Right column
+            [0, 4, 8], // Diagonal from top-left
+            [2, 4, 6]  // Diagonal from top-right
+        ];
+
+        // Initialize the game
+        initializeGame();
+
+        function initializeGame() {
+            cells.forEach(cell => cell.addEventListener('click', cellClicked));
+            restartButton.addEventListener('click', restartGame);
+            statusText.textContent = `${currentPlayer}'s turn`;
+            running = true;
+            startTimer();
+        }
+
+        function cellClicked() {
+            const cellIndex = this.getAttribute('data-index');
+
+            if (options[cellIndex] !== "" || !running) {
+                return;
+            }
+
+            // Play click sound
+            clickSound.play();
+
+            updateCell(this, cellIndex);
+            checkWinner();
+        }
+
+        function updateCell(cell, index) {
+            options[index] = currentPlayer;
+            cell.textContent = currentPlayer;
+        }
+
+        function changePlayer() {
+            currentPlayer = (currentPlayer === "X") ? "O" : "X";
+            statusText.textContent = `${currentPlayer}'s turn`;
+        }
+
+        function checkWinner() {
+            let roundWon = false;
+            let winningCells = [];
+
+            for (let i = 0; i < winConditions.length; i++) {
+                const condition = winConditions[i];
+                const cellA = options[condition[0]];
+                const cellB = options[condition[1]];
+                const cellC = options[condition[2]];
+
+                if (cellA === "" || cellB === "" || cellC === "") {
+                    continue;
+                }
+                if (cellA === cellB && cellB === cellC) {
+                    roundWon = true;
+                    winningCells = condition;
+                    break;
+                }
+            }
+
+            if (roundWon) {
+                statusText.textContent = `${currentPlayer} wins!`;
+                running = false;
+                drawWinningLine(winningCells);
+                stopTimer();
+            } else if (!options.includes("")) {
+                statusText.textContent = `It's a draw! Play again.`;
+                running = false;
+                stopTimer();
+            } else {
+                changePlayer();
+            }
+        }
+
+        function restartGame() {
+            currentPlayer = "X";
+            options = ["", "", "", "", "", "", "", "", ""];
+            statusText.textContent = `${currentPlayer}'s turn`;
+            cells.forEach(cell => cell.textContent = "");
+            running = true;
+            winningLineCtx.clearRect(0, 0, winningLineCanvas.width, winningLineCanvas.height);
+            timerX = 0;
+            timerO = 0;
+            timerXText.textContent = timerX;
+            timerOText.textContent = timerO;
+            startTimer();
+        }
+
+        function drawWinningLine(cells) {
+            const positions = [
+                { x: 0, y: 0 },    // cell 0
+                { x: 110, y: 0 },  // cell 1
+                { x: 220, y: 0 },  // cell 2
+                { x: 0, y: 110 },  // cell 3
+                { x: 110, y: 110 },// cell 4
+                { x: 220, y: 110 },// cell 5
+                { x: 0, y: 220 },  // cell 6
+                { x: 110, y: 220 },// cell 7
+                { x: 220, y: 220 } // cell 8
+            ];
+
+            const startCell = positions[cells[0]];
+            const endCell = positions[cells[2]];
+
+            winningLineCtx.strokeStyle = 'red';
+            winningLineCtx.lineWidth = 5;
+            winningLineCtx.beginPath();
+            winningLineCtx.moveTo(startCell.x + 50, startCell.y + 50);
+            winningLineCtx.lineTo(endCell.x + 50, endCell.y + 50);
+            winningLineCtx.stroke();
+        }
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (currentPlayer === "X") {
+                    timerX++;
+                    timerXText.textContent = timerX;
+                } else {
+                    timerO++;
+                    timerOText.textContent = timerO;
+                }
+            }, 1000);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+        }
+    </script>
+</body>
+</html>
